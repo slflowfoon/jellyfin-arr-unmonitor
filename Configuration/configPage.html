@@ -82,6 +82,7 @@
 <script>
   (function () {
     const GUID = 'd8936cb9-b278-4fcf-897b-4a7dec1d9879';
+    const page = document.getElementById('arrUnmonitorConfigPage');
 
     function setStatus(view, msg, ok) {
       const el = view.querySelector('#statusMsg');
@@ -96,7 +97,7 @@
 
     async function load(view) {
       try {
-        const cfg = await ApiClient.getPluginConfiguration(GUID);
+        const cfg = await window.ApiClient.getPluginConfiguration(GUID);
         field(view, 'chkEnabled').checked = cfg.Enabled !== false;
         field(view, 'chkDryRun').checked = cfg.DryRun === true;
         field(view, 'chkProcessMovies').checked = cfg.ProcessMovies !== false;
@@ -114,9 +115,11 @@
 
     function bind(view) {
       if (!view || view.dataset.arrUnmonitorBound === 'true') return;
-      view.dataset.arrUnmonitorBound = 'true';
       const form = field(view, 'arrUnmonitorConfigForm');
       const save = field(view, 'btnSave');
+      if (!form || !save) return;
+
+      view.dataset.arrUnmonitorBound = 'true';
 
       form.addEventListener('submit', async function (evt) {
         evt.preventDefault();
@@ -124,7 +127,7 @@
         setStatus(view, 'Saving...', true);
 
         try {
-          const cfg = await ApiClient.getPluginConfiguration(GUID);
+          const cfg = await window.ApiClient.getPluginConfiguration(GUID);
           cfg.Enabled = field(view, 'chkEnabled').checked;
           cfg.DryRun = field(view, 'chkDryRun').checked;
           cfg.ProcessMovies = field(view, 'chkProcessMovies').checked;
@@ -134,7 +137,7 @@
           cfg.RadarrApiKey = field(view, 'txtRadarrApiKey').value.trim();
           cfg.SonarrUrl = field(view, 'txtSonarrUrl').value.trim();
           cfg.SonarrApiKey = field(view, 'txtSonarrApiKey').value.trim();
-          await ApiClient.updatePluginConfiguration(GUID, cfg);
+          await window.ApiClient.updatePluginConfiguration(GUID, cfg);
           setStatus(view, 'Saved', true);
         } catch {
           setStatus(view, 'Save failed', false);
@@ -146,8 +149,12 @@
       load(view);
     }
 
-    document.addEventListener('pageshow', function () {
-      bind(document.getElementById('arrUnmonitorConfigPage'));
-    });
+    if (page) {
+      page.addEventListener('pageshow', function () {
+        bind(page);
+        load(page);
+      });
+      bind(page);
+    }
   })();
 </script>

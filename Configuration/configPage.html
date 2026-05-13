@@ -57,7 +57,6 @@
         <div class="inputContainer">
           <label class="inputLabel inputLabelUnfocused" for="txtRadarrApiKey">Radarr API Key</label>
           <input id="txtRadarrApiKey" type="password" class="emby-input" />
-          <div class="fieldDescription">Leave blank to keep the existing key.</div>
         </div>
 
         <h3>Sonarr</h3>
@@ -69,7 +68,6 @@
         <div class="inputContainer">
           <label class="inputLabel inputLabelUnfocused" for="txtSonarrApiKey">Sonarr API Key</label>
           <input id="txtSonarrApiKey" type="password" class="emby-input" />
-          <div class="fieldDescription">Leave blank to keep the existing key.</div>
         </div>
 
         <div style="margin-top:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
@@ -80,125 +78,3 @@
     </div>
   </div>
 </div>
-
-<script>
-  (function () {
-    const GUID = 'd8936cb9-b278-4fcf-897b-4a7dec1d9879';
-    const API = '/plugins/ArrUnmonitor';
-    const page = document.getElementById('arrUnmonitorConfigPage');
-
-    function setStatus(view, msg, ok) {
-      const el = view.querySelector('#statusMsg');
-      if (!el) return;
-      el.textContent = msg;
-      el.style.color = ok ? '#4caf50' : '#e53935';
-    }
-
-    function field(view, id) {
-      return view.querySelector('#' + id);
-    }
-
-    function getToken() {
-      try {
-        return window.ApiClient?.accessToken?.() || '';
-      } catch {
-        return '';
-      }
-    }
-
-    async function apiJson(path, opts) {
-      const headers = {
-        'X-MediaBrowser-Token': getToken(),
-        ...(opts && opts.headers ? opts.headers : {})
-      };
-      const resp = await fetch(API + path, { ...(opts || {}), headers });
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      if (resp.status === 204) return null;
-      return resp.json();
-    }
-
-    function showSavedConfirmation() {
-      if (window.Dashboard && typeof window.Dashboard.processPluginConfigurationUpdateResult === 'function') {
-        window.Dashboard.processPluginConfigurationUpdateResult();
-        return;
-      }
-
-      if (window.Dashboard && typeof window.Dashboard.alert === 'function') {
-        window.Dashboard.alert('Arr Unmonitor settings saved');
-        return;
-      }
-    }
-
-    async function load(view) {
-      try {
-        const cfg = await apiJson('/Config');
-        field(view, 'chkEnabled').checked = cfg.Enabled !== false;
-        field(view, 'chkDryRun').checked = cfg.DryRun === true;
-        field(view, 'chkProcessMovies').checked = cfg.ProcessMovies !== false;
-        field(view, 'chkProcessSeries').checked = cfg.ProcessSeries !== false;
-        field(view, 'chkRequireProviderId').checked = cfg.RequireProviderId !== false;
-        field(view, 'txtRadarrUrl').value = cfg.RadarrUrl || '';
-        field(view, 'txtRadarrApiKey').value = '';
-        field(view, 'txtRadarrApiKey').placeholder = cfg.HasRadarrApiKey ? 'Existing key saved' : '';
-        field(view, 'txtSonarrUrl').value = cfg.SonarrUrl || '';
-        field(view, 'txtSonarrApiKey').value = '';
-        field(view, 'txtSonarrApiKey').placeholder = cfg.HasSonarrApiKey ? 'Existing key saved' : '';
-        setStatus(view, '', true);
-      } catch {
-        setStatus(view, 'Could not load plugin settings', false);
-      }
-    }
-
-    function bind(view) {
-      if (!view || view.dataset.arrUnmonitorBound === 'true') return;
-      const form = field(view, 'arrUnmonitorConfigForm');
-      const save = field(view, 'btnSave');
-      if (!form || !save) return;
-
-      view.dataset.arrUnmonitorBound = 'true';
-
-      form.addEventListener('submit', async function (evt) {
-        evt.preventDefault();
-        save.disabled = true;
-        setStatus(view, 'Saving...', true);
-
-        try {
-          const cfg = {
-            Enabled: field(view, 'chkEnabled').checked,
-            DryRun: field(view, 'chkDryRun').checked,
-            ProcessMovies: field(view, 'chkProcessMovies').checked,
-            ProcessSeries: field(view, 'chkProcessSeries').checked,
-            RequireProviderId: field(view, 'chkRequireProviderId').checked,
-            RadarrUrl: field(view, 'txtRadarrUrl').value.trim(),
-            SonarrUrl: field(view, 'txtSonarrUrl').value.trim()
-          };
-          const radarrApiKey = field(view, 'txtRadarrApiKey').value.trim();
-          if (radarrApiKey) cfg.RadarrApiKey = radarrApiKey;
-          const sonarrApiKey = field(view, 'txtSonarrApiKey').value.trim();
-          if (sonarrApiKey) cfg.SonarrApiKey = sonarrApiKey;
-          await apiJson('/Config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(cfg)
-          });
-          setStatus(view, 'Saved', true);
-          showSavedConfirmation();
-        } catch {
-          setStatus(view, 'Save failed', false);
-        } finally {
-          save.disabled = false;
-        }
-      });
-
-      load(view);
-    }
-
-    if (page) {
-      page.addEventListener('pageshow', function () {
-        bind(page);
-        load(page);
-      });
-      bind(page);
-    }
-  })();
-</script>

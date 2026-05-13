@@ -54,10 +54,17 @@ public class ItemDeletedMonitor : IHostedService
             var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
             if (!config.Enabled)
             {
+                _logger.LogInformation("Arr Unmonitor is disabled; ignoring deleted Jellyfin item {ItemName} ({ItemType})", item.Name, item.GetType().Name);
                 return;
             }
 
             var typeName = item.GetType().Name;
+            _logger.LogInformation(
+                "Arr Unmonitor saw deleted Jellyfin item {ItemName} ({ItemType}) at {Path}",
+                item.Name,
+                typeName,
+                item.Path ?? "unknown path");
+
             if (config.ProcessMovies && string.Equals(typeName, "Movie", StringComparison.Ordinal))
             {
                 await _arrClient.UnmonitorMovieAsync(item, CancellationToken.None).ConfigureAwait(false);
@@ -67,7 +74,10 @@ public class ItemDeletedMonitor : IHostedService
             if (config.ProcessSeries && string.Equals(typeName, "Series", StringComparison.Ordinal))
             {
                 await _arrClient.UnmonitorSeriesAsync(item, CancellationToken.None).ConfigureAwait(false);
+                return;
             }
+
+            _logger.LogInformation("Arr Unmonitor ignored deleted Jellyfin item {ItemName} ({ItemType})", item.Name, typeName);
         }
         catch (Exception ex)
         {

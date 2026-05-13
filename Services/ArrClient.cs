@@ -35,26 +35,38 @@ public class ArrClient : IArrClient
         var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
         if (string.IsNullOrWhiteSpace(config.RadarrUrl) || string.IsNullOrWhiteSpace(config.RadarrApiKey))
         {
-            _logger.LogDebug("Radarr is not configured; skipping deleted movie {ItemName}", item.Name);
+            _logger.LogWarning("Radarr is not configured; skipping deleted movie {ItemName}", item.Name);
             return;
         }
 
         var tmdbId = GetProviderInt(item, "Tmdb");
-        if (tmdbId is null)
+        var imdbId = GetProviderString(item, "Imdb");
+        if (tmdbId is null && string.IsNullOrWhiteSpace(imdbId))
         {
             LogProviderMiss("Radarr", item, config.RequireProviderId);
             return;
         }
+
+        _logger.LogInformation(
+            "Looking for Radarr match for deleted Jellyfin movie {ItemName}; TMDb={TmdbId}, IMDb={ImdbId}",
+            item.Name,
+            tmdbId?.ToString(CultureInfo.InvariantCulture) ?? "none",
+            string.IsNullOrWhiteSpace(imdbId) ? "none" : imdbId);
 
         using var request = CreateRequest(HttpMethod.Get, config.RadarrUrl, "/api/v3/movie", config.RadarrApiKey);
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         await EnsureSuccessAsync(response, "fetch Radarr movies", cancellationToken).ConfigureAwait(false);
 
         var movies = await response.Content.ReadFromJsonAsync<List<RadarrMovie>>(JsonOptions, cancellationToken).ConfigureAwait(false) ?? [];
-        var movie = movies.FirstOrDefault(candidate => candidate.TmdbId == tmdbId.Value);
+        var movie = movies.FirstOrDefault(candidate => tmdbId is not null && candidate.TmdbId == tmdbId.Value)
+            ?? movies.FirstOrDefault(candidate => !string.IsNullOrWhiteSpace(imdbId) && string.Equals(candidate.ImdbId, imdbId, StringComparison.OrdinalIgnoreCase));
         if (movie is null)
         {
-            _logger.LogInformation("No Radarr movie matched deleted Jellyfin movie {ItemName} with TMDb {TmdbId}", item.Name, tmdbId);
+            _logger.LogInformation(
+                "No Radarr movie matched deleted Jellyfin movie {ItemName}; TMDb={TmdbId}, IMDb={ImdbId}",
+                item.Name,
+                tmdbId?.ToString(CultureInfo.InvariantCulture) ?? "none",
+                string.IsNullOrWhiteSpace(imdbId) ? "none" : imdbId);
             return;
         }
 
@@ -83,7 +95,7 @@ public class ArrClient : IArrClient
         var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
         if (string.IsNullOrWhiteSpace(config.SonarrUrl) || string.IsNullOrWhiteSpace(config.SonarrApiKey))
         {
-            _logger.LogDebug("Sonarr is not configured; skipping deleted series {ItemName}", item.Name);
+            _logger.LogWarning("Sonarr is not configured; skipping deleted series {ItemName}", item.Name);
             return;
         }
 
@@ -93,6 +105,8 @@ public class ArrClient : IArrClient
             LogProviderMiss("Sonarr", item, config.RequireProviderId);
             return;
         }
+
+        _logger.LogInformation("Looking for Sonarr match for deleted Jellyfin series {ItemName}; TVDb={TvdbId}", item.Name, tvdbId);
 
         using var request = CreateRequest(HttpMethod.Get, config.SonarrUrl, "/api/v3/series", config.SonarrApiKey);
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
@@ -136,12 +150,26 @@ public class ArrClient : IArrClient
 
     private static int? GetProviderInt(BaseItem item, string provider)
     {
-        if (!item.ProviderIds.TryGetValue(provider, out var raw) && !item.ProviderIds.TryGetValue(provider.ToLowerInvariant(), out raw))
+        var raw = GetProviderString(item, provider);
+        if (string.IsNullOrWhiteSpace(raw))
         {
             return null;
         }
 
         return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : null;
+    }
+
+    private static string? GetProviderString(BaseItem item, string provider)
+    {
+        foreach (var (key, value) in item.ProviderIds)
+        {
+            if (string.Equals(key, provider, StringComparison.OrdinalIgnoreCase))
+            {
+                return value;
+            }
+        }
+
+        return null;
     }
 
     private void LogProviderMiss(string target, BaseItem item, bool requireProviderId)
@@ -178,6 +206,8 @@ public class ArrClient : IArrClient
         public string? Title { get; set; }
 
         public int TmdbId { get; set; }
+
+        public string? ImdbId { get; set; }
 
         public bool Monitored { get; set; }
 

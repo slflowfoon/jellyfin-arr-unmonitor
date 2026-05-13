@@ -32,6 +32,10 @@
     }
   }
 
+  function matchesSavedValue(actual, expected) {
+    return String(actual || '').trim() === String(expected || '').trim();
+  }
+
   function bindConfigPage(view) {
     if (!view || view.dataset.arrUnmonitorConfigBound === 'true') return;
 
@@ -82,9 +86,26 @@
         cfg.SonarrUrl = sonarrUrlInput.value.trim();
         cfg.SonarrApiKey = sonarrKeyInput.value.trim();
         await window.ApiClient.updatePluginConfiguration(GUID, cfg);
+
+        const saved = await window.ApiClient.getPluginConfiguration(GUID);
+        const savedOk =
+          saved.Enabled === cfg.Enabled &&
+          saved.DryRun === cfg.DryRun &&
+          saved.ProcessMovies === cfg.ProcessMovies &&
+          saved.ProcessSeries === cfg.ProcessSeries &&
+          saved.RequireProviderId === cfg.RequireProviderId &&
+          matchesSavedValue(saved.RadarrUrl, cfg.RadarrUrl) &&
+          matchesSavedValue(saved.RadarrApiKey, cfg.RadarrApiKey) &&
+          matchesSavedValue(saved.SonarrUrl, cfg.SonarrUrl) &&
+          matchesSavedValue(saved.SonarrApiKey, cfg.SonarrApiKey);
+
+        if (!savedOk) {
+          throw new Error('Jellyfin returned different plugin configuration after save');
+        }
+
         setConfigStatus(view, 'Saved', true);
       } catch {
-        setConfigStatus(view, 'Save failed', false);
+        setConfigStatus(view, 'Save failed or did not persist', false);
       } finally {
         saveBtn.disabled = false;
       }

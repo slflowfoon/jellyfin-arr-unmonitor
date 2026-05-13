@@ -77,6 +77,12 @@ public class ItemDeletedMonitor : IHostedService
                 return;
             }
 
+            if (config.ProcessSportarr)
+            {
+                await _arrClient.UnmonitorSportarrEventAsync(item, CancellationToken.None).ConfigureAwait(false);
+                return;
+            }
+
             _logger.LogInformation("Arr Unmonitor ignored deleted Jellyfin item {ItemName} ({ItemType})", item.Name, typeName);
         }
         catch (Exception ex)

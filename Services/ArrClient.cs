@@ -162,12 +162,93 @@ public class ArrClient : IArrClient
         _logger.LogInformation("Unmonitored Sonarr series {Title} after Jellyfin deletion", series.Title);
     }
 
+    public async Task UnmonitorSportarrEventAsync(BaseItem item, CancellationToken cancellationToken)
+    {
+        var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+        _logger.LogInformation(
+            "Arr Unmonitor Sportarr config state before processing {ItemName}: URL configured: {HasUrl}; API key configured: {HasApiKey}; Dry run: {DryRun}",
+            item.Name,
+            !string.IsNullOrWhiteSpace(config.SportarrUrl),
+            !string.IsNullOrWhiteSpace(config.SportarrApiKey),
+            config.DryRun);
+
+        if (string.IsNullOrWhiteSpace(config.SportarrUrl) || string.IsNullOrWhiteSpace(config.SportarrApiKey))
+        {
+            _logger.LogWarning(
+                "Sportarr is not configured; skipping deleted item {ItemName}. URL configured: {HasUrl}; API key configured: {HasApiKey}",
+                item.Name,
+                !string.IsNullOrWhiteSpace(config.SportarrUrl),
+                !string.IsNullOrWhiteSpace(config.SportarrApiKey));
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(item.Path))
+        {
+            _logger.LogWarning("Deleted Jellyfin item {ItemName} has no path; cannot match Sportarr event", item.Name);
+            return;
+        }
+
+        using var request = CreateSportarrRequest(HttpMethod.Get, config.SportarrUrl, "/events", config.SportarrApiKey);
+        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        await EnsureSuccessAsync(response, "fetch Sportarr events", cancellationToken).ConfigureAwait(false);
+
+        var events = await response.Content.ReadFromJsonAsync<List<SportarrEvent>>(JsonOptions, cancellationToken).ConfigureAwait(false) ?? [];
+        var deletedPath = NormalizePath(item.Path);
+        var sportarrEvent = events.FirstOrDefault(candidate =>
+            PathMatches(candidate.FilePath, deletedPath) ||
+            (candidate.Files?.Any(file => PathMatches(file.FilePath, deletedPath)) ?? false));
+
+        if (sportarrEvent is null)
+        {
+            _logger.LogInformation("No Sportarr event matched deleted Jellyfin item {ItemName} at {Path}", item.Name, item.Path);
+            return;
+        }
+
+        if (!sportarrEvent.Monitored)
+        {
+            _logger.LogInformation("Sportarr event {Title} is already unmonitored", sportarrEvent.Title);
+            return;
+        }
+
+        if (config.DryRun)
+        {
+            _logger.LogInformation("Dry run: would unmonitor Sportarr event {Title} ({SportarrEventId})", sportarrEvent.Title, sportarrEvent.Id);
+            return;
+        }
+
+        using var update = CreateSportarrRequest(HttpMethod.Put, config.SportarrUrl, $"/events/{sportarrEvent.Id}", config.SportarrApiKey);
+        update.Content = JsonContent.Create(new { monitored = false }, options: JsonOptions);
+        using var updateResponse = await _httpClient.SendAsync(update, cancellationToken).ConfigureAwait(false);
+        await EnsureSuccessAsync(updateResponse, $"unmonitor Sportarr event {sportarrEvent.Id}", cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation("Unmonitored Sportarr event {Title} after Jellyfin deletion", sportarrEvent.Title);
+    }
+
     private static HttpRequestMessage CreateRequest(HttpMethod method, string baseUrl, string path, string apiKey)
     {
         var root = baseUrl.TrimEnd('/');
         var request = new HttpRequestMessage(method, root + path);
         request.Headers.Add("X-Api-Key", apiKey);
         return request;
+    }
+
+    private static HttpRequestMessage CreateSportarrRequest(HttpMethod method, string baseUrl, string path, string apiKey)
+    {
+        var root = baseUrl.TrimEnd('/');
+        var apiPath = root.EndsWith("/api", StringComparison.OrdinalIgnoreCase) ? path : "/api" + path;
+        var request = new HttpRequestMessage(method, root + apiPath);
+        request.Headers.Add("X-Api-Key", apiKey);
+        return request;
+    }
+
+    private static bool PathMatches(string? candidatePath, string deletedPath)
+    {
+        return !string.IsNullOrWhiteSpace(candidatePath) &&
+            string.Equals(NormalizePath(candidatePath), deletedPath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizePath(string path)
+    {
+        return path.Replace('\\', '/').Trim();
     }
 
     private static int? GetProviderInt(BaseItem item, string provider)
@@ -246,6 +327,30 @@ public class ArrClient : IArrClient
         public int TvdbId { get; set; }
 
         public bool Monitored { get; set; }
+
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement>? Extra { get; set; }
+    }
+
+    private sealed class SportarrEvent
+    {
+        public int Id { get; set; }
+
+        public string? Title { get; set; }
+
+        public bool Monitored { get; set; }
+
+        public string? FilePath { get; set; }
+
+        public List<SportarrEventFile>? Files { get; set; }
+
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement>? Extra { get; set; }
+    }
+
+    private sealed class SportarrEventFile
+    {
+        public string? FilePath { get; set; }
 
         [JsonExtensionData]
         public Dictionary<string, JsonElement>? Extra { get; set; }

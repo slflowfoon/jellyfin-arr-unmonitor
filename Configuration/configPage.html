@@ -42,6 +42,13 @@
 
         <div class="checkboxContainer checkboxContainer-withDescription">
           <label>
+            <input id="chkProcessSportarr" type="checkbox" is="emby-checkbox" />
+            <span>Process sports events with Sportarr</span>
+          </label>
+        </div>
+
+        <div class="checkboxContainer checkboxContainer-withDescription">
+          <label>
             <input id="chkRequireProviderId" type="checkbox" is="emby-checkbox" />
             <span>Require provider IDs</span>
           </label>
@@ -68,6 +75,17 @@
         <div class="inputContainer">
           <label class="inputLabel inputLabelUnfocused" for="txtSonarrApiKey">Sonarr API Key</label>
           <input id="txtSonarrApiKey" type="password" class="emby-input" />
+        </div>
+
+        <h3>Sportarr</h3>
+        <div class="inputContainer">
+          <label class="inputLabel inputLabelUnfocused" for="txtSportarrUrl">Sportarr URL</label>
+          <input id="txtSportarrUrl" type="url" class="emby-input" placeholder="http://192.168.0.20:1867" />
+        </div>
+
+        <div class="inputContainer">
+          <label class="inputLabel inputLabelUnfocused" for="txtSportarrApiKey">Sportarr API Key</label>
+          <input id="txtSportarrApiKey" type="password" class="emby-input" />
         </div>
 
         <div style="margin-top:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">

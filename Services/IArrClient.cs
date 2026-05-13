@@ -9,4 +9,6 @@ public interface IArrClient
     Task UnmonitorMovieAsync(BaseItem item, CancellationToken cancellationToken);
 
     Task UnmonitorSeriesAsync(BaseItem item, CancellationToken cancellationToken);
+
+    Task UnmonitorSportarrEventAsync(BaseItem item, CancellationToken cancellationToken);
 }

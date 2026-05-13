@@ -33,9 +33,20 @@ public class ArrClient : IArrClient
     public async Task UnmonitorMovieAsync(BaseItem item, CancellationToken cancellationToken)
     {
         var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+        _logger.LogInformation(
+            "Arr Unmonitor Radarr config state before processing {ItemName}: URL configured: {HasUrl}; API key configured: {HasApiKey}; Dry run: {DryRun}",
+            item.Name,
+            !string.IsNullOrWhiteSpace(config.RadarrUrl),
+            !string.IsNullOrWhiteSpace(config.RadarrApiKey),
+            config.DryRun);
+
         if (string.IsNullOrWhiteSpace(config.RadarrUrl) || string.IsNullOrWhiteSpace(config.RadarrApiKey))
         {
-            _logger.LogWarning("Radarr is not configured; skipping deleted movie {ItemName}", item.Name);
+            _logger.LogWarning(
+                "Radarr is not configured; skipping deleted movie {ItemName}. URL configured: {HasUrl}; API key configured: {HasApiKey}",
+                item.Name,
+                !string.IsNullOrWhiteSpace(config.RadarrUrl),
+                !string.IsNullOrWhiteSpace(config.RadarrApiKey));
             return;
         }
 
@@ -93,9 +104,20 @@ public class ArrClient : IArrClient
     public async Task UnmonitorSeriesAsync(BaseItem item, CancellationToken cancellationToken)
     {
         var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+        _logger.LogInformation(
+            "Arr Unmonitor Sonarr config state before processing {ItemName}: URL configured: {HasUrl}; API key configured: {HasApiKey}; Dry run: {DryRun}",
+            item.Name,
+            !string.IsNullOrWhiteSpace(config.SonarrUrl),
+            !string.IsNullOrWhiteSpace(config.SonarrApiKey),
+            config.DryRun);
+
         if (string.IsNullOrWhiteSpace(config.SonarrUrl) || string.IsNullOrWhiteSpace(config.SonarrApiKey))
         {
-            _logger.LogWarning("Sonarr is not configured; skipping deleted series {ItemName}", item.Name);
+            _logger.LogWarning(
+                "Sonarr is not configured; skipping deleted series {ItemName}. URL configured: {HasUrl}; API key configured: {HasApiKey}",
+                item.Name,
+                !string.IsNullOrWhiteSpace(config.SonarrUrl),
+                !string.IsNullOrWhiteSpace(config.SonarrApiKey));
             return;
         }
 

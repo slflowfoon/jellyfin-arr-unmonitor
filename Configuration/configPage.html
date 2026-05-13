@@ -95,6 +95,18 @@
       return view.querySelector('#' + id);
     }
 
+    function showSavedConfirmation() {
+      if (window.Dashboard && typeof window.Dashboard.processPluginConfigurationUpdateResult === 'function') {
+        window.Dashboard.processPluginConfigurationUpdateResult();
+        return;
+      }
+
+      if (window.Dashboard && typeof window.Dashboard.alert === 'function') {
+        window.Dashboard.alert('Arr Unmonitor settings saved');
+        return;
+      }
+    }
+
     async function load(view) {
       try {
         const cfg = await window.ApiClient.getPluginConfiguration(GUID);
@@ -139,6 +151,7 @@
           cfg.SonarrApiKey = field(view, 'txtSonarrApiKey').value.trim();
           await window.ApiClient.updatePluginConfiguration(GUID, cfg);
           setStatus(view, 'Saved', true);
+          showSavedConfirmation();
         } catch {
           setStatus(view, 'Save failed', false);
         } finally {

@@ -1,0 +1,153 @@
+<div
+  id="arrUnmonitorConfigPage"
+  data-role="page"
+  class="page type-interior pluginConfigurationPage"
+>
+  <div data-role="content">
+    <div class="content-primary">
+      <h2>Arr Unmonitor</h2>
+      <p style="color:#aaa;margin-bottom:20px">
+        Unmonitor matching Radarr movies and Sonarr series when they are deleted from Jellyfin.
+      </p>
+
+      <form id="arrUnmonitorConfigForm">
+        <div class="checkboxContainer checkboxContainer-withDescription">
+          <label>
+            <input id="chkEnabled" type="checkbox" is="emby-checkbox" />
+            <span>Enabled</span>
+          </label>
+        </div>
+
+        <div class="checkboxContainer checkboxContainer-withDescription">
+          <label>
+            <input id="chkDryRun" type="checkbox" is="emby-checkbox" />
+            <span>Dry run</span>
+          </label>
+          <div class="fieldDescription">Log what would be unmonitored without changing Radarr or Sonarr.</div>
+        </div>
+
+        <div class="checkboxContainer checkboxContainer-withDescription">
+          <label>
+            <input id="chkProcessMovies" type="checkbox" is="emby-checkbox" />
+            <span>Process movies with Radarr</span>
+          </label>
+        </div>
+
+        <div class="checkboxContainer checkboxContainer-withDescription">
+          <label>
+            <input id="chkProcessSeries" type="checkbox" is="emby-checkbox" />
+            <span>Process series with Sonarr</span>
+          </label>
+        </div>
+
+        <div class="checkboxContainer checkboxContainer-withDescription">
+          <label>
+            <input id="chkRequireProviderId" type="checkbox" is="emby-checkbox" />
+            <span>Require provider IDs</span>
+          </label>
+          <div class="fieldDescription">Uses TMDb for Radarr and TVDb for Sonarr. This avoids unsafe title-only matches.</div>
+        </div>
+
+        <h3>Radarr</h3>
+        <div class="inputContainer">
+          <label class="inputLabel inputLabelUnfocused" for="txtRadarrUrl">Radarr URL</label>
+          <input id="txtRadarrUrl" type="url" class="emby-input" placeholder="http://192.168.0.20:7878" />
+        </div>
+
+        <div class="inputContainer">
+          <label class="inputLabel inputLabelUnfocused" for="txtRadarrApiKey">Radarr API Key</label>
+          <input id="txtRadarrApiKey" type="password" class="emby-input" />
+        </div>
+
+        <h3>Sonarr</h3>
+        <div class="inputContainer">
+          <label class="inputLabel inputLabelUnfocused" for="txtSonarrUrl">Sonarr URL</label>
+          <input id="txtSonarrUrl" type="url" class="emby-input" placeholder="http://192.168.0.20:8989" />
+        </div>
+
+        <div class="inputContainer">
+          <label class="inputLabel inputLabelUnfocused" for="txtSonarrApiKey">Sonarr API Key</label>
+          <input id="txtSonarrApiKey" type="password" class="emby-input" />
+        </div>
+
+        <div style="margin-top:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <button id="btnSave" type="submit" class="raised button-submit emby-button">Save</button>
+          <span id="statusMsg" style="font-size:13px"></span>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const GUID = 'd8936cb9-b278-4fcf-897b-4a7dec1d9879';
+
+    function setStatus(view, msg, ok) {
+      const el = view.querySelector('#statusMsg');
+      if (!el) return;
+      el.textContent = msg;
+      el.style.color = ok ? '#4caf50' : '#e53935';
+    }
+
+    function field(view, id) {
+      return view.querySelector('#' + id);
+    }
+
+    async function load(view) {
+      try {
+        const cfg = await ApiClient.getPluginConfiguration(GUID);
+        field(view, 'chkEnabled').checked = cfg.Enabled !== false;
+        field(view, 'chkDryRun').checked = cfg.DryRun === true;
+        field(view, 'chkProcessMovies').checked = cfg.ProcessMovies !== false;
+        field(view, 'chkProcessSeries').checked = cfg.ProcessSeries !== false;
+        field(view, 'chkRequireProviderId').checked = cfg.RequireProviderId !== false;
+        field(view, 'txtRadarrUrl').value = cfg.RadarrUrl || '';
+        field(view, 'txtRadarrApiKey').value = cfg.RadarrApiKey || '';
+        field(view, 'txtSonarrUrl').value = cfg.SonarrUrl || '';
+        field(view, 'txtSonarrApiKey').value = cfg.SonarrApiKey || '';
+        setStatus(view, '', true);
+      } catch {
+        setStatus(view, 'Could not load plugin settings', false);
+      }
+    }
+
+    function bind(view) {
+      if (!view || view.dataset.arrUnmonitorBound === 'true') return;
+      view.dataset.arrUnmonitorBound = 'true';
+      const form = field(view, 'arrUnmonitorConfigForm');
+      const save = field(view, 'btnSave');
+
+      form.addEventListener('submit', async function (evt) {
+        evt.preventDefault();
+        save.disabled = true;
+        setStatus(view, 'Saving...', true);
+
+        try {
+          const cfg = await ApiClient.getPluginConfiguration(GUID);
+          cfg.Enabled = field(view, 'chkEnabled').checked;
+          cfg.DryRun = field(view, 'chkDryRun').checked;
+          cfg.ProcessMovies = field(view, 'chkProcessMovies').checked;
+          cfg.ProcessSeries = field(view, 'chkProcessSeries').checked;
+          cfg.RequireProviderId = field(view, 'chkRequireProviderId').checked;
+          cfg.RadarrUrl = field(view, 'txtRadarrUrl').value.trim();
+          cfg.RadarrApiKey = field(view, 'txtRadarrApiKey').value.trim();
+          cfg.SonarrUrl = field(view, 'txtSonarrUrl').value.trim();
+          cfg.SonarrApiKey = field(view, 'txtSonarrApiKey').value.trim();
+          await ApiClient.updatePluginConfiguration(GUID, cfg);
+          setStatus(view, 'Saved', true);
+        } catch {
+          setStatus(view, 'Save failed', false);
+        } finally {
+          save.disabled = false;
+        }
+      });
+
+      load(view);
+    }
+
+    document.addEventListener('pageshow', function () {
+      bind(document.getElementById('arrUnmonitorConfigPage'));
+    });
+  })();
+</script>

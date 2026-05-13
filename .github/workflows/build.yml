@@ -1,0 +1,86 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            CURRENT_VERSION=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' ArrUnmonitor.csproj | sed 's/\.0$//')
+            echo "version=${CURRENT_VERSION}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sync project version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          perl -0pi -e 's|<Version>[^<]+</Version>|<Version>'"$VERSION"'.0</Version>|' ArrUnmonitor.csproj
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build
+        run: dotnet build --configuration Release
+
+      - name: Publish
+        run: dotnet publish --configuration Release --output ./publish
+
+      - name: Package
+        run: |
+          cd publish
+          zip -j ../ArrUnmonitor.zip ArrUnmonitor.dll
+
+      - name: Compute checksum
+        id: checksum
+        run: echo "md5=$(md5sum ArrUnmonitor.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ArrUnmonitor.zip
+          generate_release_notes: true
+
+      - name: Update manifest
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${{ steps.version.outputs.version }}"
+          CHECKSUM="${{ steps.checksum.outputs.md5 }}"
+          REPO="${{ github.repository }}"
+          URL="https://github.com/${REPO}/releases/download/${TAG}/ArrUnmonitor.zip"
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          NEW_ENTRY=$(jq -n \
+            --arg v "${VERSION}.0" \
+            --arg url "$URL" \
+            --arg md5 "$CHECKSUM" \
+            --arg ts "$TIMESTAMP" \
+            '{version:$v,changelog:"See GitHub release notes.",targetAbi:"10.10.0.0",sourceUrl:$url,checksum:$md5,timestamp:$ts}')
+
+          jq --argjson entry "$NEW_ENTRY" \
+            '.[0].versions = [$entry] + .[0].versions' \
+            manifest.json > manifest.tmp && mv manifest.tmp manifest.json
+
+      - name: Commit release metadata
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add manifest.json ArrUnmonitor.csproj
+          git commit -m "Update release metadata for ${{ github.ref_name }}" || true
+          git push origin HEAD:main || true

@@ -1,0 +1,11 @@
+[
+  {
+    "guid": "d8936cb9-b278-4fcf-897b-4a7dec1d9879",
+    "name": "Arr Unmonitor",
+    "description": "Unmonitor matching Radarr movies and Sonarr series when they are deleted from Jellyfin.",
+    "overview": "Listens for Jellyfin item deletion events and unmonitors the matching Radarr movie or Sonarr series using provider IDs.",
+    "owner": "slflowfoon",
+    "category": "General",
+    "versions": []
+  }
+]

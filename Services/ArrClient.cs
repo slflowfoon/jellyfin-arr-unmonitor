@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Controller.Entities;
@@ -196,11 +197,18 @@ public class ArrClient : IArrClient
         var deletedPath = NormalizePath(item.Path);
         var sportarrEvent = events.FirstOrDefault(candidate =>
             PathMatches(candidate.FilePath, deletedPath) ||
-            (candidate.Files?.Any(file => PathMatches(file.FilePath, deletedPath)) ?? false));
+            (candidate.Files?.Any(file => PathMatches(file.FilePath, deletedPath)) ?? false))
+            ?? FindSportarrEventByEpisodeMetadata(events, item);
 
         if (sportarrEvent is null)
         {
-            _logger.LogInformation("No Sportarr event matched deleted Jellyfin item {ItemName} at {Path}", item.Name, item.Path);
+            var episodeKey = GetEpisodeKey(item);
+            _logger.LogInformation(
+                "No Sportarr event matched deleted Jellyfin item {ItemName} at {Path}; extracted season={Season}, episode={Episode}",
+                item.Name,
+                item.Path,
+                episodeKey?.Season.ToString(CultureInfo.InvariantCulture) ?? "none",
+                episodeKey?.Episode.ToString(CultureInfo.InvariantCulture) ?? "none");
             return;
         }
 
@@ -249,6 +257,134 @@ public class ArrClient : IArrClient
     private static string NormalizePath(string path)
     {
         return path.Replace('\\', '/').Trim();
+    }
+
+    private SportarrEvent? FindSportarrEventByEpisodeMetadata(IEnumerable<SportarrEvent> events, BaseItem item)
+    {
+        var episodeKey = GetEpisodeKey(item);
+        if (episodeKey is null)
+        {
+            return null;
+        }
+
+        var candidates = events
+            .Where(candidate => candidate.SeasonNumber == episodeKey.Value.Season && candidate.EpisodeNumber == episodeKey.Value.Episode)
+            .ToList();
+
+        if (candidates.Count == 0)
+        {
+            _logger.LogInformation(
+                "No Sportarr events had season={Season}, episode={Episode} for deleted Jellyfin item {ItemName}",
+                episodeKey.Value.Season,
+                episodeKey.Value.Episode,
+                item.Name);
+            return null;
+        }
+
+        if (candidates.Count == 1)
+        {
+            _logger.LogInformation(
+                "Matched Sportarr event {Title} by season={Season}, episode={Episode}",
+                candidates[0].Title,
+                episodeKey.Value.Season,
+                episodeKey.Value.Episode);
+            return candidates[0];
+        }
+
+        var pathAndName = ((item.Path ?? string.Empty) + " " + item.Name).ToLowerInvariant();
+        var titleMatches = candidates
+            .Where(candidate => TextContains(pathAndName, candidate.Title) || TextContains(candidate.Title, item.Name))
+            .ToList();
+
+        if (titleMatches.Count == 1)
+        {
+            _logger.LogInformation(
+                "Matched Sportarr event {Title} by season={Season}, episode={Episode}, and title",
+                titleMatches[0].Title,
+                episodeKey.Value.Season,
+                episodeKey.Value.Episode);
+            return titleMatches[0];
+        }
+
+        var leagueMatches = titleMatches.Count > 0 ? titleMatches : candidates;
+        leagueMatches = leagueMatches
+            .Where(candidate => !string.IsNullOrWhiteSpace(candidate.LeagueName) && pathAndName.Contains(candidate.LeagueName.ToLowerInvariant(), StringComparison.Ordinal))
+            .ToList();
+
+        if (leagueMatches.Count == 1)
+        {
+            _logger.LogInformation(
+                "Matched Sportarr event {Title} by season={Season}, episode={Episode}, and league {LeagueName}",
+                leagueMatches[0].Title,
+                episodeKey.Value.Season,
+                episodeKey.Value.Episode,
+                leagueMatches[0].LeagueName);
+            return leagueMatches[0];
+        }
+
+        _logger.LogWarning(
+            "Found {Count} Sportarr events with season={Season}, episode={Episode} for deleted Jellyfin item {ItemName}; refusing ambiguous match",
+            candidates.Count,
+            episodeKey.Value.Season,
+            episodeKey.Value.Episode,
+            item.Name);
+        return null;
+    }
+
+    private static (int Season, int Episode)? GetEpisodeKey(BaseItem item)
+    {
+        var season = GetIntProperty(item, "ParentIndexNumber") ?? GetIntProperty(item, "SeasonNumber");
+        var episode = GetIntProperty(item, "IndexNumber") ?? GetIntProperty(item, "EpisodeNumber");
+
+        if (season is not null && episode is not null)
+        {
+            return (season.Value, episode.Value);
+        }
+
+        var source = (item.Path ?? string.Empty) + " " + item.Name;
+        var match = Regex.Match(source, @"\bS(?<season>\d{1,4})E(?<episode>\d{1,4})\b", RegexOptions.IgnoreCase);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        return int.TryParse(match.Groups["season"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedSeason) &&
+            int.TryParse(match.Groups["episode"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedEpisode)
+            ? (parsedSeason, parsedEpisode)
+            : null;
+    }
+
+    private static int? GetIntProperty(BaseItem item, string propertyName)
+    {
+        var property = item.GetType().GetProperty(propertyName);
+        if (property is null)
+        {
+            return null;
+        }
+
+        var value = property.GetValue(item);
+        return value switch
+        {
+            int intValue => intValue,
+            _ => null
+        };
+    }
+
+    private static bool TextContains(string? haystack, string? needle)
+    {
+        var normalizedHaystack = NormalizeText(haystack);
+        var normalizedNeedle = NormalizeText(needle);
+        return normalizedNeedle.Length > 0 && normalizedHaystack.Contains(normalizedNeedle, StringComparison.Ordinal);
+    }
+
+    private static string NormalizeText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        return Regex.Replace(value.ToLowerInvariant(), @"[^a-z0-9]+", " ").Trim();
     }
 
     private static int? GetProviderInt(BaseItem item, string provider)
@@ -337,6 +473,12 @@ public class ArrClient : IArrClient
         public int Id { get; set; }
 
         public string? Title { get; set; }
+
+        public string? LeagueName { get; set; }
+
+        public int? SeasonNumber { get; set; }
+
+        public int? EpisodeNumber { get; set; }
 
         public bool Monitored { get; set; }
 

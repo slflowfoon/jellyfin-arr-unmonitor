@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "0.1.9.0",
+        "changelog": "See GitHub release notes.",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/slflowfoon/jellyfin-arr-unmonitor/releases/download/v0.1.9/ArrUnmonitor.zip",
+        "checksum": "9e98392d60f1640a63f5c2ec30ecacb8",
+        "timestamp": "2026-05-14T12:00:58Z"
+      },
+      {
         "version": "0.1.8.0",
         "changelog": "See GitHub release notes.",
         "targetAbi": "10.10.0.0",

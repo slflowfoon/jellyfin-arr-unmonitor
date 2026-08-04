@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using Microsoft.Extensions.Hosting;
@@ -147,6 +148,7 @@ public class ItemDeletedMonitor : IHostedService
             Recursive = true,
             IsFolder = false,
             IsVirtualItem = false,
+            IncludeItemTypes = [BaseItemKind.Episode],
             GroupByPresentationUniqueKey = false
         };
 

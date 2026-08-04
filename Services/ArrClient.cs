@@ -163,7 +163,7 @@ public class ArrClient : IArrClient
         _logger.LogInformation("Unmonitored Sonarr series {Title} after Jellyfin deletion", series.Title);
     }
 
-    public async Task UnmonitorSportarrEventAsync(
+    public async Task<bool> UnmonitorSportarrEventAsync(
         BaseItem item,
         IReadOnlyList<BaseItem> deletedChildren,
         CancellationToken cancellationToken)
@@ -183,13 +183,13 @@ public class ArrClient : IArrClient
                 item.Name,
                 !string.IsNullOrWhiteSpace(config.SportarrUrl),
                 !string.IsNullOrWhiteSpace(config.SportarrApiKey));
-            return;
+            return false;
         }
 
         if (string.IsNullOrWhiteSpace(item.Path))
         {
             _logger.LogWarning("Deleted Jellyfin item {ItemName} has no path; cannot match Sportarr event", item.Name);
-            return;
+            return false;
         }
 
         using var request = CreateSportarrRequest(HttpMethod.Get, config.SportarrUrl, "/events", config.SportarrApiKey);
@@ -199,6 +199,7 @@ public class ArrClient : IArrClient
         var events = await response.Content.ReadFromJsonAsync<List<SportarrEvent>>(JsonOptions, cancellationToken).ConfigureAwait(false) ?? [];
         var deletedPath = NormalizePath(item.Path);
         var seasonFolderKey = GetSeasonFolderKey(item);
+        var folderLeagueName = item.IsFolder ? GetFolderLeagueName(item.Path) : null;
         var sportarrEvents = events
             .Where(candidate =>
                 PathMatches(candidate.FilePath, deletedPath) ||
@@ -206,9 +207,9 @@ public class ArrClient : IArrClient
                 (candidate.Files?.Any(file => PathMatches(file.FilePath, deletedPath) || PathIsUnder(file.FilePath, deletedPath)) ?? false))
             .ToList();
 
-        if (seasonFolderKey is not null)
+        if (!string.IsNullOrWhiteSpace(folderLeagueName) && deletedChildren.Count > 0)
         {
-            sportarrEvents.AddRange(FindSportarrEventsByDeletedChildren(events, deletedChildren));
+            sportarrEvents.AddRange(FindSportarrEventsByDeletedChildren(events, deletedChildren, folderLeagueName));
         }
         else if (sportarrEvents.Count == 0)
         {
@@ -234,17 +235,18 @@ public class ArrClient : IArrClient
                 episodeKey?.Season.ToString(CultureInfo.InvariantCulture) ?? "none",
                 episodeKey?.Episode.ToString(CultureInfo.InvariantCulture) ?? "none",
                 seasonFolderKey?.Season.ToString(CultureInfo.InvariantCulture) ?? "none",
-                seasonFolderKey?.LeagueName ?? "none");
+                folderLeagueName ?? "none");
 
-            if (seasonFolderKey is not null)
+            if (!string.IsNullOrWhiteSpace(folderLeagueName) && deletedChildren.Count > 0)
             {
                 _logger.LogWarning(
-                    "Deleted Sportarr season folder {Path} had {ChildCount} cached Jellyfin files, but none could be matched safely; refusing to unmonitor the whole season",
+                    "Deleted Jellyfin folder {Path} had {ChildCount} cached episodes, but none matched Sportarr league {LeagueName}; refusing a broad Sportarr match",
                     item.Path,
-                    deletedChildren.Count);
+                    deletedChildren.Count,
+                    folderLeagueName);
             }
 
-            return;
+            return false;
         }
 
         if (sportarrEvents.Count > 1)
@@ -294,6 +296,8 @@ public class ArrClient : IArrClient
                 sportarrEvents.Count,
                 item.Name);
         }
+
+        return true;
     }
 
     private static HttpRequestMessage CreateRequest(HttpMethod method, string baseUrl, string path, string apiKey)
@@ -410,9 +414,16 @@ public class ArrClient : IArrClient
 
     private List<SportarrEvent> FindSportarrEventsByDeletedChildren(
         IEnumerable<SportarrEvent> events,
-        IReadOnlyList<BaseItem> deletedChildren)
+        IReadOnlyList<BaseItem> deletedChildren,
+        string leagueName)
     {
-        var eventList = events.ToList();
+        var normalizedLeagueName = NormalizeText(leagueName);
+        var eventList = events
+            .Where(candidate => string.Equals(
+                NormalizeText(candidate.LeagueName),
+                normalizedLeagueName,
+                StringComparison.Ordinal))
+            .ToList();
         var matches = new List<SportarrEvent>();
 
         foreach (var child in deletedChildren)
@@ -432,8 +443,9 @@ public class ArrClient : IArrClient
         if (matches.Count > 0)
         {
             _logger.LogInformation(
-                "Matched {Count} Sportarr events from {ChildCount} cached Jellyfin files under the deleted folder",
+                "Matched {Count} Sportarr events in league {LeagueName} from {ChildCount} cached Jellyfin files under the deleted folder",
                 matches.Count,
+                leagueName,
                 deletedChildren.Count);
         }
 
@@ -486,6 +498,32 @@ public class ArrClient : IArrClient
         }
 
         return (season, segments[^2]);
+    }
+
+    private static string? GetFolderLeagueName(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        var segments = NormalizePath(path)
+            .TrimEnd('/')
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (segments.Length == 0)
+        {
+            return null;
+        }
+
+        for (var i = 1; i < segments.Length; i++)
+        {
+            if (Regex.IsMatch(segments[i], @"^Season\s+\d{4}$", RegexOptions.IgnoreCase))
+            {
+                return segments[i - 1];
+            }
+        }
+
+        return segments[^1];
     }
 
     private static int? GetIntProperty(BaseItem item, string propertyName)

@@ -11,7 +11,7 @@ public interface IArrClient
 
     Task UnmonitorSeriesAsync(BaseItem item, CancellationToken cancellationToken);
 
-    Task UnmonitorSportarrEventAsync(
+    Task<bool> UnmonitorSportarrEventAsync(
         BaseItem item,
         IReadOnlyList<BaseItem> deletedChildren,
         CancellationToken cancellationToken);

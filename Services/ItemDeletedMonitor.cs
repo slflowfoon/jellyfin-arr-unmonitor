@@ -110,6 +110,29 @@ public class ItemDeletedMonitor : IHostedService
                 return;
             }
 
+            if (config.ProcessSportarr &&
+                string.Equals(typeName, "Series", StringComparison.Ordinal) &&
+                deletedChildren.Count > 0)
+            {
+                try
+                {
+                    var handledBySportarr = await _arrClient
+                        .UnmonitorSportarrEventAsync(item, deletedChildren, CancellationToken.None)
+                        .ConfigureAwait(false);
+                    if (handledBySportarr)
+                    {
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(
+                        ex,
+                        "Sportarr matching failed for deleted Jellyfin series {ItemName}; continuing with Sonarr matching",
+                        item.Name);
+                }
+            }
+
             if (config.ProcessSeries && string.Equals(typeName, "Series", StringComparison.Ordinal))
             {
                 await _arrClient.UnmonitorSeriesAsync(item, CancellationToken.None).ConfigureAwait(false);

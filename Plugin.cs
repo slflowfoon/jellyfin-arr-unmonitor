@@ -33,7 +33,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
     public override Guid Id => PluginGuid;
 
-    public override string Description => "Unmonitors matching Radarr movies and Sonarr series when they are deleted from Jellyfin.";
+    public override string Description => "Unmonitors matching Radarr, Sonarr, and Sportarr items when they are deleted from Jellyfin.";
 
     public IEnumerable<PluginPageInfo> GetPages() =>
     [

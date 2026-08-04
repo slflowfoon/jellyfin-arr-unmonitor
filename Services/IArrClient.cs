@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Controller.Entities;
@@ -10,5 +11,8 @@ public interface IArrClient
 
     Task UnmonitorSeriesAsync(BaseItem item, CancellationToken cancellationToken);
 
-    Task UnmonitorSportarrEventAsync(BaseItem item, CancellationToken cancellationToken);
+    Task UnmonitorSportarrEventAsync(
+        BaseItem item,
+        IReadOnlyList<BaseItem> deletedChildren,
+        CancellationToken cancellationToken);
 }

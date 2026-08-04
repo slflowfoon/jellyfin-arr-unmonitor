@@ -8,7 +8,7 @@ The plugin listens to Jellyfin's item removed event and matches items by provide
 - Sonarr series: TVDb ID
 - Sportarr events: file path, or league plus season/episode metadata when Sportarr has already cleared the file path
 
-Deleting a Sportarr season folder such as `Formula 1/Season 2026` unmonitors every event in that league and season.
+Deleting a Sportarr season folder such as `Formula 1/Season 2026` unmonitors only the events represented by media files that Jellyfin had inside that folder.
 
 Title-only matching is intentionally not implemented in the first version because it is easy to unmonitor the wrong item.
 

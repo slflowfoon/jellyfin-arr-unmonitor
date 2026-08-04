@@ -34,23 +34,24 @@ public class ItemDeletedMonitor : IHostedService
         _libraryManager.ItemAdded += OnItemAddedOrUpdated;
         _libraryManager.ItemUpdated += OnItemAddedOrUpdated;
 
-        int cachedItemCount;
-        lock (_cacheLock)
+        var cachedItemCount = 0;
+        try
         {
-            var fileItems = _libraryManager.GetItemList(new InternalItemsQuery
+            lock (_cacheLock)
             {
-                Recursive = true,
-                IsFolder = false,
-                IsVirtualItem = false,
-                GroupByPresentationUniqueKey = false
-            });
+                foreach (var item in GetInitialFileItems())
+                {
+                    CacheItem(item);
+                }
 
-            foreach (var item in fileItems)
-            {
-                CacheItem(item);
+                cachedItemCount = _fileItemCache.Count;
             }
-
-            cachedItemCount = _fileItemCache.Count;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Arr Unmonitor could not initialize its folder-deletion cache; individual item monitoring will remain active");
         }
 
         _logger.LogInformation("Arr Unmonitor deletion monitor started with {ItemCount} file paths cached", cachedItemCount);
@@ -137,6 +138,31 @@ public class ItemDeletedMonitor : IHostedService
         }
 
         _fileItemCache[item.Id] = item;
+    }
+
+    private IReadOnlyList<BaseItem> GetInitialFileItems()
+    {
+        var query = new InternalItemsQuery
+        {
+            Recursive = true,
+            IsFolder = false,
+            IsVirtualItem = false,
+            GroupByPresentationUniqueKey = false
+        };
+
+        // Jellyfin 10.11 changed only the return type of this method, which is
+        // binary-incompatible with plugins built against 10.10. Resolve it at
+        // runtime so one plugin build can safely support both versions.
+        var getItemList = _libraryManager.GetType().GetMethod("GetItemList", [typeof(InternalItemsQuery)]);
+        if (getItemList is null)
+        {
+            throw new MissingMethodException(_libraryManager.GetType().FullName, "GetItemList(InternalItemsQuery)");
+        }
+
+        var result = getItemList.Invoke(_libraryManager, [query]);
+        return result is IEnumerable<BaseItem> items
+            ? items.ToList()
+            : throw new InvalidOperationException("Jellyfin GetItemList returned an unsupported result type");
     }
 
     private IReadOnlyList<BaseItem> TakeDeletedChildren(BaseItem item)

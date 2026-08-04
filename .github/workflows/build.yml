@@ -34,13 +34,18 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: |
+            8.0.x
+            9.0.x
 
-      - name: Build
-        run: dotnet build --configuration Release
+      - name: Build against Jellyfin 10.10
+        run: dotnet build --configuration Release -p:JellyfinControllerVersion=10.10.0 -p:TargetFramework=net8.0 -p:TargetFrameworks=net8.0
+
+      - name: Build against Jellyfin 10.11
+        run: dotnet build --configuration Release -p:JellyfinControllerVersion=10.11.8 -p:TargetFramework=net9.0 -p:TargetFrameworks=net9.0
 
       - name: Publish
-        run: dotnet publish --configuration Release --output ./publish
+        run: dotnet publish --configuration Release --output ./publish -p:JellyfinControllerVersion=10.10.0 -p:TargetFramework=net8.0 -p:TargetFrameworks=net8.0
 
       - name: Package
         run: |

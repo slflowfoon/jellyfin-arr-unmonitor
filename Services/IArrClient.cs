@@ -7,6 +7,12 @@ namespace ArrUnmonitor.Services;
 
 public interface IArrClient
 {
+    Task<ConnectionTestResult> TestConnectionAsync(
+        string? service,
+        string? baseUrl,
+        string? apiKey,
+        CancellationToken cancellationToken);
+
     Task UnmonitorMovieAsync(BaseItem item, CancellationToken cancellationToken);
 
     Task UnmonitorSeriesAsync(BaseItem item, CancellationToken cancellationToken);

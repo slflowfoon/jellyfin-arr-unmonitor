@@ -17,6 +17,7 @@ Title-only matching is intentionally not implemented in the first version becaus
 ## Configuration
 
 Configure the plugin from the Jellyfin dashboard after installation.
+Each service includes a read-only connection test for checking the entered URL and API key before saving.
 
 Required fields:
 

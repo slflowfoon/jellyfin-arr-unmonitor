@@ -14,6 +14,37 @@
     el.style.color = ok ? '#4caf50' : '#e53935';
   }
 
+  function setConnectionStatus(status, msg, ok) {
+    status.textContent = msg;
+    status.style.color = ok ? '#4caf50' : '#e53935';
+  }
+
+  async function testConnection(service, urlInput, keyInput, button, status) {
+    button.disabled = true;
+    setConnectionStatus(status, 'Testing...', true);
+
+    try {
+      const result = await window.ApiClient.ajax({
+        type: 'POST',
+        url: window.ApiClient.getUrl('plugins/ArrUnmonitor/TestConnection'),
+        data: JSON.stringify({
+          Service: service,
+          Url: urlInput.value.trim(),
+          ApiKey: keyInput.value.trim()
+        }),
+        contentType: 'application/json',
+        dataType: 'json'
+      });
+      const success = result.Success === true || result.success === true;
+      const message = result.Message || result.message || 'Connection test returned no result';
+      setConnectionStatus(status, message, success);
+    } catch {
+      setConnectionStatus(status, 'Connection test failed', false);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   async function loadConfigPage(view) {
     try {
       const cfg = await window.ApiClient.getPluginConfiguration(GUID);
@@ -62,6 +93,12 @@
     const sportarrKeyInput = field(view, 'txtSportarrApiKey');
     const seerrUrlInput = field(view, 'txtSeerrUrl');
     const seerrKeyInput = field(view, 'txtSeerrApiKey');
+    const connectionTests = [
+      ['radarr', radarrUrlInput, radarrKeyInput, field(view, 'btnTestRadarr'), field(view, 'statusRadarr')],
+      ['sonarr', sonarrUrlInput, sonarrKeyInput, field(view, 'btnTestSonarr'), field(view, 'statusSonarr')],
+      ['sportarr', sportarrUrlInput, sportarrKeyInput, field(view, 'btnTestSportarr'), field(view, 'statusSportarr')],
+      ['seerr', seerrUrlInput, seerrKeyInput, field(view, 'btnTestSeerr'), field(view, 'statusSeerr')]
+    ];
 
     if (
       !form ||
@@ -80,12 +117,18 @@
       !sportarrUrlInput ||
       !sportarrKeyInput ||
       !seerrUrlInput ||
-      !seerrKeyInput
+      !seerrKeyInput ||
+      connectionTests.some(test => test.some(value => !value))
     ) {
       return;
     }
 
     view.dataset.arrUnmonitorConfigBound = 'true';
+
+    connectionTests.forEach(test => {
+      const [service, urlInput, keyInput, button, status] = test;
+      button.addEventListener('click', () => testConnection(service, urlInput, keyInput, button, status));
+    });
 
     form.addEventListener('submit', async evt => {
       evt.preventDefault();

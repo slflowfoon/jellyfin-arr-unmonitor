@@ -31,6 +31,103 @@ public class ArrClient : IArrClient
         _logger = logger;
     }
 
+    public async Task<ConnectionTestResult> TestConnectionAsync(
+        string? service,
+        string? baseUrl,
+        string? apiKey,
+        CancellationToken cancellationToken)
+    {
+        var normalizedService = (service ?? string.Empty).Trim().ToLowerInvariant();
+        var serviceName = normalizedService switch
+        {
+            "radarr" => "Radarr",
+            "sonarr" => "Sonarr",
+            "sportarr" => "Sportarr",
+            "seerr" => "Seerr",
+            _ => string.Empty
+        };
+
+        if (string.IsNullOrEmpty(serviceName))
+        {
+            return new ConnectionTestResult(false, "Unknown service.");
+        }
+
+        if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(apiKey))
+        {
+            return new ConnectionTestResult(false, $"Enter the {serviceName} URL and API key first.");
+        }
+
+        var normalizedBaseUrl = baseUrl.Trim();
+        var normalizedApiKey = apiKey.Trim();
+        if (!Uri.TryCreate(normalizedBaseUrl, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return new ConnectionTestResult(false, "Enter a valid HTTP or HTTPS URL.");
+        }
+
+        using var request = normalizedService switch
+        {
+            "radarr" => CreateRequest(HttpMethod.Get, normalizedBaseUrl, "/api/v3/system/status", normalizedApiKey),
+            "sonarr" => CreateRequest(HttpMethod.Get, normalizedBaseUrl, "/api/v3/system/status", normalizedApiKey),
+            "sportarr" => CreateSportarrRequest(HttpMethod.Get, normalizedBaseUrl, "/settings", normalizedApiKey),
+            "seerr" => CreateSeerrRequest(HttpMethod.Get, normalizedBaseUrl, "/auth/me", normalizedApiKey),
+            _ => throw new InvalidOperationException("Unsupported service")
+        };
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+
+        try
+        {
+            using var response = await _httpClient
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token)
+                .ConfigureAwait(false);
+
+            if (response.IsSuccessStatusCode)
+            {
+                if (normalizedService == "sportarr")
+                {
+                    var settings = await response.Content
+                        .ReadFromJsonAsync<JsonElement>(JsonOptions, timeout.Token)
+                        .ConfigureAwait(false);
+                    var configuredApiKey = GetSportarrConfiguredApiKey(settings);
+                    if (!string.IsNullOrWhiteSpace(configuredApiKey) &&
+                        !IsMaskedSecret(configuredApiKey) &&
+                        !string.Equals(configuredApiKey, normalizedApiKey, StringComparison.Ordinal))
+                    {
+                        return new ConnectionTestResult(false, "Sportarr rejected the API key.");
+                    }
+                }
+
+                _logger.LogInformation("Arr Unmonitor {Service} connection test succeeded", serviceName);
+                return new ConnectionTestResult(true, $"Connected to {serviceName}.");
+            }
+
+            if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+            {
+                return new ConnectionTestResult(false, $"{serviceName} rejected the API key.");
+            }
+
+            return new ConnectionTestResult(
+                false,
+                $"{serviceName} returned HTTP {(int)response.StatusCode}.");
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new ConnectionTestResult(false, $"{serviceName} did not respond within 10 seconds.");
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogWarning(ex, "Arr Unmonitor {Service} connection test failed", serviceName);
+            return new ConnectionTestResult(false, $"Could not connect to {serviceName}.");
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Arr Unmonitor {Service} connection test returned invalid JSON", serviceName);
+            return new ConnectionTestResult(false, $"{serviceName} returned an unexpected response.");
+        }
+    }
+
     public async Task UnmonitorMovieAsync(BaseItem item, CancellationToken cancellationToken)
     {
         var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
@@ -392,6 +489,45 @@ public class ArrClient : IArrClient
         var request = new HttpRequestMessage(method, root + apiPath);
         request.Headers.Add("X-Api-Key", apiKey);
         return request;
+    }
+
+    private static string? GetSportarrConfiguredApiKey(JsonElement settings)
+    {
+        if (settings.ValueKind != JsonValueKind.Object ||
+            !settings.TryGetProperty("securitySettings", out var securitySettings))
+        {
+            return null;
+        }
+
+        if (securitySettings.ValueKind == JsonValueKind.String)
+        {
+            var serializedSettings = securitySettings.GetString();
+            if (string.IsNullOrWhiteSpace(serializedSettings))
+            {
+                return null;
+            }
+
+            using var document = JsonDocument.Parse(serializedSettings);
+            return GetJsonString(document.RootElement, "apiKey");
+        }
+
+        return securitySettings.ValueKind == JsonValueKind.Object
+            ? GetJsonString(securitySettings, "apiKey")
+            : null;
+    }
+
+    private static string? GetJsonString(JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+    }
+
+    private static bool IsMaskedSecret(string value)
+    {
+        return value.Length >= 4 &&
+            !char.IsLetterOrDigit(value[0]) &&
+            value.All(character => character == value[0]);
     }
 
     private static bool PathMatches(string? candidatePath, string deletedPath)

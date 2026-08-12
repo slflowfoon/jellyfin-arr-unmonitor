@@ -104,9 +104,24 @@ public class ItemDeletedMonitor : IHostedService
                 typeName,
                 item.Path ?? "unknown path");
 
-            if (config.ProcessMovies && string.Equals(typeName, "Movie", StringComparison.Ordinal))
+            if (string.Equals(typeName, "Movie", StringComparison.Ordinal))
             {
-                await _arrClient.UnmonitorMovieAsync(item, CancellationToken.None).ConfigureAwait(false);
+                if (config.ProcessMovies)
+                {
+                    await RunTargetAsync(
+                        "Radarr",
+                        item,
+                        () => _arrClient.UnmonitorMovieAsync(item, CancellationToken.None)).ConfigureAwait(false);
+                }
+
+                if (config.ProcessSeerr)
+                {
+                    await RunTargetAsync(
+                        "Seerr",
+                        item,
+                        () => _arrClient.RemoveFromSeerrAsync(item, "movie", CancellationToken.None)).ConfigureAwait(false);
+                }
+
                 return;
             }
 
@@ -133,9 +148,24 @@ public class ItemDeletedMonitor : IHostedService
                 }
             }
 
-            if (config.ProcessSeries && string.Equals(typeName, "Series", StringComparison.Ordinal))
+            if (string.Equals(typeName, "Series", StringComparison.Ordinal))
             {
-                await _arrClient.UnmonitorSeriesAsync(item, CancellationToken.None).ConfigureAwait(false);
+                if (config.ProcessSeries)
+                {
+                    await RunTargetAsync(
+                        "Sonarr",
+                        item,
+                        () => _arrClient.UnmonitorSeriesAsync(item, CancellationToken.None)).ConfigureAwait(false);
+                }
+
+                if (config.ProcessSeerr)
+                {
+                    await RunTargetAsync(
+                        "Seerr",
+                        item,
+                        () => _arrClient.RemoveFromSeerrAsync(item, "tv", CancellationToken.None)).ConfigureAwait(false);
+                }
+
                 return;
             }
 
@@ -150,6 +180,23 @@ public class ItemDeletedMonitor : IHostedService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to process deleted Jellyfin item {ItemName} ({ItemId})", item.Name, item.Id);
+        }
+    }
+
+    private async Task RunTargetAsync(string target, BaseItem item, Func<Task> action)
+    {
+        try
+        {
+            await action().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Failed to update {Target} for deleted Jellyfin item {ItemName} ({ItemId})",
+                target,
+                item.Name,
+                item.Id);
         }
     }
 

@@ -7,7 +7,7 @@
     <div class="content-primary">
       <h2>Arr Unmonitor</h2>
       <p style="color:#aaa;margin-bottom:20px">
-        Unmonitor matching Radarr movies and Sonarr series when they are deleted from Jellyfin.
+        Unmonitor matching Arr items and clear stale Seerr availability when media is deleted from Jellyfin.
       </p>
 
       <form id="arrUnmonitorConfigForm">
@@ -23,7 +23,7 @@
             <input id="chkDryRun" type="checkbox" is="emby-checkbox" />
             <span>Dry run</span>
           </label>
-          <div class="fieldDescription">Log what would be unmonitored without changing Radarr or Sonarr.</div>
+          <div class="fieldDescription">Log what would change without updating Radarr, Sonarr, Sportarr, or Seerr.</div>
         </div>
 
         <div class="checkboxContainer checkboxContainer-withDescription">
@@ -49,10 +49,17 @@
 
         <div class="checkboxContainer checkboxContainer-withDescription">
           <label>
+            <input id="chkProcessSeerr" type="checkbox" is="emby-checkbox" />
+            <span>Clear deleted movies and shows from Seerr</span>
+          </label>
+        </div>
+
+        <div class="checkboxContainer checkboxContainer-withDescription">
+          <label>
             <input id="chkRequireProviderId" type="checkbox" is="emby-checkbox" />
             <span>Require provider IDs</span>
           </label>
-          <div class="fieldDescription">Uses TMDb for Radarr and TVDb for Sonarr. This avoids unsafe title-only matches.</div>
+          <div class="fieldDescription">Uses TMDb for Radarr and Seerr, and TVDb for Sonarr. This avoids unsafe title-only matches.</div>
         </div>
 
         <h3>Radarr</h3>
@@ -86,6 +93,17 @@
         <div class="inputContainer">
           <label class="inputLabel inputLabelUnfocused" for="txtSportarrApiKey">Sportarr API Key</label>
           <input id="txtSportarrApiKey" type="password" class="emby-input" />
+        </div>
+
+        <h3>Seerr</h3>
+        <div class="inputContainer">
+          <label class="inputLabel inputLabelUnfocused" for="txtSeerrUrl">Seerr URL</label>
+          <input id="txtSeerrUrl" type="url" class="emby-input" placeholder="http://192.168.0.20:5055" />
+        </div>
+
+        <div class="inputContainer">
+          <label class="inputLabel inputLabelUnfocused" for="txtSeerrApiKey">Seerr API Key</label>
+          <input id="txtSeerrApiKey" type="password" class="emby-input" />
         </div>
 
         <div style="margin-top:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">

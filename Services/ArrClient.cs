@@ -300,6 +300,74 @@ public class ArrClient : IArrClient
         return true;
     }
 
+    public async Task RemoveFromSeerrAsync(BaseItem item, string mediaType, CancellationToken cancellationToken)
+    {
+        var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+        _logger.LogInformation(
+            "Arr Unmonitor Seerr config state before processing {ItemName}: URL configured: {HasUrl}; API key configured: {HasApiKey}; Dry run: {DryRun}",
+            item.Name,
+            !string.IsNullOrWhiteSpace(config.SeerrUrl),
+            !string.IsNullOrWhiteSpace(config.SeerrApiKey),
+            config.DryRun);
+
+        if (string.IsNullOrWhiteSpace(config.SeerrUrl) || string.IsNullOrWhiteSpace(config.SeerrApiKey))
+        {
+            _logger.LogWarning(
+                "Seerr is not configured; skipping deleted {MediaType} {ItemName}. URL configured: {HasUrl}; API key configured: {HasApiKey}",
+                mediaType,
+                item.Name,
+                !string.IsNullOrWhiteSpace(config.SeerrUrl),
+                !string.IsNullOrWhiteSpace(config.SeerrApiKey));
+            return;
+        }
+
+        var tmdbId = GetProviderInt(item, "Tmdb");
+        if (tmdbId is null)
+        {
+            _logger.LogWarning(
+                "Deleted Jellyfin {MediaType} {ItemName} has no TMDb ID; cannot match it safely in Seerr",
+                mediaType,
+                item.Name);
+            return;
+        }
+
+        using var lookup = CreateSeerrRequest(HttpMethod.Get, config.SeerrUrl, $"/{mediaType}/{tmdbId.Value}", config.SeerrApiKey);
+        using var lookupResponse = await _httpClient.SendAsync(lookup, cancellationToken).ConfigureAwait(false);
+        await EnsureSuccessAsync(lookupResponse, $"fetch Seerr {mediaType} {tmdbId.Value}", cancellationToken).ConfigureAwait(false);
+
+        var details = await lookupResponse.Content
+            .ReadFromJsonAsync<SeerrMediaDetails>(JsonOptions, cancellationToken)
+            .ConfigureAwait(false);
+        if (details?.MediaInfo is null)
+        {
+            _logger.LogInformation(
+                "Deleted Jellyfin {MediaType} {ItemName} has no media record in Seerr; TMDb={TmdbId}",
+                mediaType,
+                item.Name,
+                tmdbId.Value);
+            return;
+        }
+
+        if (config.DryRun)
+        {
+            _logger.LogInformation(
+                "Dry run: would clear deleted {MediaType} {ItemName} from Seerr media record {SeerrMediaId}",
+                mediaType,
+                item.Name,
+                details.MediaInfo.Id);
+            return;
+        }
+
+        using var delete = CreateSeerrRequest(HttpMethod.Delete, config.SeerrUrl, $"/media/{details.MediaInfo.Id}", config.SeerrApiKey);
+        using var deleteResponse = await _httpClient.SendAsync(delete, cancellationToken).ConfigureAwait(false);
+        await EnsureSuccessAsync(deleteResponse, $"clear Seerr media record {details.MediaInfo.Id}", cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation(
+            "Cleared deleted {MediaType} {ItemName} from Seerr; TMDb={TmdbId}",
+            mediaType,
+            item.Name,
+            tmdbId.Value);
+    }
+
     private static HttpRequestMessage CreateRequest(HttpMethod method, string baseUrl, string path, string apiKey)
     {
         var root = baseUrl.TrimEnd('/');
@@ -312,6 +380,15 @@ public class ArrClient : IArrClient
     {
         var root = baseUrl.TrimEnd('/');
         var apiPath = root.EndsWith("/api", StringComparison.OrdinalIgnoreCase) ? path : "/api" + path;
+        var request = new HttpRequestMessage(method, root + apiPath);
+        request.Headers.Add("X-Api-Key", apiKey);
+        return request;
+    }
+
+    private static HttpRequestMessage CreateSeerrRequest(HttpMethod method, string baseUrl, string path, string apiKey)
+    {
+        var root = baseUrl.TrimEnd('/');
+        var apiPath = root.EndsWith("/api/v1", StringComparison.OrdinalIgnoreCase) ? path : "/api/v1" + path;
         var request = new HttpRequestMessage(method, root + apiPath);
         request.Headers.Add("X-Api-Key", apiKey);
         return request;
@@ -668,5 +745,15 @@ public class ArrClient : IArrClient
 
         [JsonExtensionData]
         public Dictionary<string, JsonElement>? Extra { get; set; }
+    }
+
+    private sealed class SeerrMediaDetails
+    {
+        public SeerrMediaInfo? MediaInfo { get; set; }
+    }
+
+    private sealed class SeerrMediaInfo
+    {
+        public int Id { get; set; }
     }
 }

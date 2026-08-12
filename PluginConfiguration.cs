@@ -14,6 +14,8 @@ public class PluginConfiguration : BasePluginConfiguration
 
     public bool ProcessSportarr { get; set; } = true;
 
+    public bool ProcessSeerr { get; set; } = true;
+
     public bool RequireProviderId { get; set; } = true;
 
     public string RadarrUrl { get; set; } = string.Empty;
@@ -27,4 +29,8 @@ public class PluginConfiguration : BasePluginConfiguration
     public string SportarrUrl { get; set; } = string.Empty;
 
     public string SportarrApiKey { get; set; } = string.Empty;
+
+    public string SeerrUrl { get; set; } = string.Empty;
+
+    public string SeerrApiKey { get; set; } = string.Empty;
 }

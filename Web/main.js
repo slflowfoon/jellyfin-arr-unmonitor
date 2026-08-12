@@ -22,6 +22,7 @@
       field(view, 'chkProcessMovies').checked = cfg.ProcessMovies !== false;
       field(view, 'chkProcessSeries').checked = cfg.ProcessSeries !== false;
       field(view, 'chkProcessSportarr').checked = cfg.ProcessSportarr !== false;
+      field(view, 'chkProcessSeerr').checked = cfg.ProcessSeerr !== false;
       field(view, 'chkRequireProviderId').checked = cfg.RequireProviderId !== false;
       field(view, 'txtRadarrUrl').value = cfg.RadarrUrl || '';
       field(view, 'txtRadarrApiKey').value = cfg.RadarrApiKey || '';
@@ -29,6 +30,8 @@
       field(view, 'txtSonarrApiKey').value = cfg.SonarrApiKey || '';
       field(view, 'txtSportarrUrl').value = cfg.SportarrUrl || '';
       field(view, 'txtSportarrApiKey').value = cfg.SportarrApiKey || '';
+      field(view, 'txtSeerrUrl').value = cfg.SeerrUrl || '';
+      field(view, 'txtSeerrApiKey').value = cfg.SeerrApiKey || '';
       setConfigStatus(view, '', true);
     } catch {
       setConfigStatus(view, 'Could not load plugin settings', false);
@@ -49,6 +52,7 @@
     const processMoviesInput = field(view, 'chkProcessMovies');
     const processSeriesInput = field(view, 'chkProcessSeries');
     const processSportarrInput = field(view, 'chkProcessSportarr');
+    const processSeerrInput = field(view, 'chkProcessSeerr');
     const requireProviderIdInput = field(view, 'chkRequireProviderId');
     const radarrUrlInput = field(view, 'txtRadarrUrl');
     const radarrKeyInput = field(view, 'txtRadarrApiKey');
@@ -56,6 +60,8 @@
     const sonarrKeyInput = field(view, 'txtSonarrApiKey');
     const sportarrUrlInput = field(view, 'txtSportarrUrl');
     const sportarrKeyInput = field(view, 'txtSportarrApiKey');
+    const seerrUrlInput = field(view, 'txtSeerrUrl');
+    const seerrKeyInput = field(view, 'txtSeerrApiKey');
 
     if (
       !form ||
@@ -65,13 +71,16 @@
       !processMoviesInput ||
       !processSeriesInput ||
       !processSportarrInput ||
+      !processSeerrInput ||
       !requireProviderIdInput ||
       !radarrUrlInput ||
       !radarrKeyInput ||
       !sonarrUrlInput ||
       !sonarrKeyInput ||
       !sportarrUrlInput ||
-      !sportarrKeyInput
+      !sportarrKeyInput ||
+      !seerrUrlInput ||
+      !seerrKeyInput
     ) {
       return;
     }
@@ -90,6 +99,7 @@
         cfg.ProcessMovies = processMoviesInput.checked;
         cfg.ProcessSeries = processSeriesInput.checked;
         cfg.ProcessSportarr = processSportarrInput.checked;
+        cfg.ProcessSeerr = processSeerrInput.checked;
         cfg.RequireProviderId = requireProviderIdInput.checked;
         cfg.RadarrUrl = radarrUrlInput.value.trim();
         cfg.RadarrApiKey = radarrKeyInput.value.trim();
@@ -97,6 +107,8 @@
         cfg.SonarrApiKey = sonarrKeyInput.value.trim();
         cfg.SportarrUrl = sportarrUrlInput.value.trim();
         cfg.SportarrApiKey = sportarrKeyInput.value.trim();
+        cfg.SeerrUrl = seerrUrlInput.value.trim();
+        cfg.SeerrApiKey = seerrKeyInput.value.trim();
         await window.ApiClient.updatePluginConfiguration(GUID, cfg);
 
         const saved = await window.ApiClient.getPluginConfiguration(GUID);
@@ -106,13 +118,16 @@
           saved.ProcessMovies === cfg.ProcessMovies &&
           saved.ProcessSeries === cfg.ProcessSeries &&
           saved.ProcessSportarr === cfg.ProcessSportarr &&
+          saved.ProcessSeerr === cfg.ProcessSeerr &&
           saved.RequireProviderId === cfg.RequireProviderId &&
           matchesSavedValue(saved.RadarrUrl, cfg.RadarrUrl) &&
           matchesSavedValue(saved.RadarrApiKey, cfg.RadarrApiKey) &&
           matchesSavedValue(saved.SonarrUrl, cfg.SonarrUrl) &&
           matchesSavedValue(saved.SonarrApiKey, cfg.SonarrApiKey) &&
           matchesSavedValue(saved.SportarrUrl, cfg.SportarrUrl) &&
-          matchesSavedValue(saved.SportarrApiKey, cfg.SportarrApiKey);
+          matchesSavedValue(saved.SportarrApiKey, cfg.SportarrApiKey) &&
+          matchesSavedValue(saved.SeerrUrl, cfg.SeerrUrl) &&
+          matchesSavedValue(saved.SeerrApiKey, cfg.SeerrApiKey);
 
         if (!savedOk) {
           throw new Error('Jellyfin returned different plugin configuration after save');

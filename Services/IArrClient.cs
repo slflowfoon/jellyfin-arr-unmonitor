@@ -15,4 +15,6 @@ public interface IArrClient
         BaseItem item,
         IReadOnlyList<BaseItem> deletedChildren,
         CancellationToken cancellationToken);
+
+    Task RemoveFromSeerrAsync(BaseItem item, string mediaType, CancellationToken cancellationToken);
 }

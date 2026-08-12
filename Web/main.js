@@ -74,7 +74,7 @@
   }
 
   function bindConfigPage(view) {
-    if (!view || view.dataset.arrUnmonitorConfigBound === 'true') return;
+    if (!view) return;
 
     const form = field(view, 'arrUnmonitorConfigForm');
     const saveBtn = field(view, 'btnSave');
@@ -123,66 +123,69 @@
       return;
     }
 
-    view.dataset.arrUnmonitorConfigBound = 'true';
-
     connectionTests.forEach(test => {
       const [service, urlInput, keyInput, button, status] = test;
+      if (button.dataset.arrUnmonitorTestBound === 'true') return;
+      button.dataset.arrUnmonitorTestBound = 'true';
       button.addEventListener('click', () => testConnection(service, urlInput, keyInput, button, status));
     });
 
-    form.addEventListener('submit', async evt => {
-      evt.preventDefault();
-      saveBtn.disabled = true;
-      setConfigStatus(view, 'Saving...', true);
+    if (view.dataset.arrUnmonitorConfigBound !== 'true') {
+      view.dataset.arrUnmonitorConfigBound = 'true';
+      form.addEventListener('submit', async evt => {
+        evt.preventDefault();
+        saveBtn.disabled = true;
+        setConfigStatus(view, 'Saving...', true);
 
-      try {
-        const cfg = await window.ApiClient.getPluginConfiguration(GUID);
-        cfg.Enabled = enabledInput.checked;
-        cfg.DryRun = dryRunInput.checked;
-        cfg.ProcessMovies = processMoviesInput.checked;
-        cfg.ProcessSeries = processSeriesInput.checked;
-        cfg.ProcessSportarr = processSportarrInput.checked;
-        cfg.ProcessSeerr = processSeerrInput.checked;
-        cfg.RequireProviderId = requireProviderIdInput.checked;
-        cfg.RadarrUrl = radarrUrlInput.value.trim();
-        cfg.RadarrApiKey = radarrKeyInput.value.trim();
-        cfg.SonarrUrl = sonarrUrlInput.value.trim();
-        cfg.SonarrApiKey = sonarrKeyInput.value.trim();
-        cfg.SportarrUrl = sportarrUrlInput.value.trim();
-        cfg.SportarrApiKey = sportarrKeyInput.value.trim();
-        cfg.SeerrUrl = seerrUrlInput.value.trim();
-        cfg.SeerrApiKey = seerrKeyInput.value.trim();
-        await window.ApiClient.updatePluginConfiguration(GUID, cfg);
+        try {
+          const cfg = await window.ApiClient.getPluginConfiguration(GUID);
+          cfg.Enabled = enabledInput.checked;
+          cfg.DryRun = dryRunInput.checked;
+          cfg.ProcessMovies = processMoviesInput.checked;
+          cfg.ProcessSeries = processSeriesInput.checked;
+          cfg.ProcessSportarr = processSportarrInput.checked;
+          cfg.ProcessSeerr = processSeerrInput.checked;
+          cfg.RequireProviderId = requireProviderIdInput.checked;
+          cfg.RadarrUrl = radarrUrlInput.value.trim();
+          cfg.RadarrApiKey = radarrKeyInput.value.trim();
+          cfg.SonarrUrl = sonarrUrlInput.value.trim();
+          cfg.SonarrApiKey = sonarrKeyInput.value.trim();
+          cfg.SportarrUrl = sportarrUrlInput.value.trim();
+          cfg.SportarrApiKey = sportarrKeyInput.value.trim();
+          cfg.SeerrUrl = seerrUrlInput.value.trim();
+          cfg.SeerrApiKey = seerrKeyInput.value.trim();
+          await window.ApiClient.updatePluginConfiguration(GUID, cfg);
 
-        const saved = await window.ApiClient.getPluginConfiguration(GUID);
-        const savedOk =
-          saved.Enabled === cfg.Enabled &&
-          saved.DryRun === cfg.DryRun &&
-          saved.ProcessMovies === cfg.ProcessMovies &&
-          saved.ProcessSeries === cfg.ProcessSeries &&
-          saved.ProcessSportarr === cfg.ProcessSportarr &&
-          saved.ProcessSeerr === cfg.ProcessSeerr &&
-          saved.RequireProviderId === cfg.RequireProviderId &&
-          matchesSavedValue(saved.RadarrUrl, cfg.RadarrUrl) &&
-          matchesSavedValue(saved.RadarrApiKey, cfg.RadarrApiKey) &&
-          matchesSavedValue(saved.SonarrUrl, cfg.SonarrUrl) &&
-          matchesSavedValue(saved.SonarrApiKey, cfg.SonarrApiKey) &&
-          matchesSavedValue(saved.SportarrUrl, cfg.SportarrUrl) &&
-          matchesSavedValue(saved.SportarrApiKey, cfg.SportarrApiKey) &&
-          matchesSavedValue(saved.SeerrUrl, cfg.SeerrUrl) &&
-          matchesSavedValue(saved.SeerrApiKey, cfg.SeerrApiKey);
+          const saved = await window.ApiClient.getPluginConfiguration(GUID);
+          const savedOk =
+            saved.Enabled === cfg.Enabled &&
+            saved.DryRun === cfg.DryRun &&
+            saved.ProcessMovies === cfg.ProcessMovies &&
+            saved.ProcessSeries === cfg.ProcessSeries &&
+            saved.ProcessSportarr === cfg.ProcessSportarr &&
+            saved.ProcessSeerr === cfg.ProcessSeerr &&
+            saved.RequireProviderId === cfg.RequireProviderId &&
+            matchesSavedValue(saved.RadarrUrl, cfg.RadarrUrl) &&
+            matchesSavedValue(saved.RadarrApiKey, cfg.RadarrApiKey) &&
+            matchesSavedValue(saved.SonarrUrl, cfg.SonarrUrl) &&
+            matchesSavedValue(saved.SonarrApiKey, cfg.SonarrApiKey) &&
+            matchesSavedValue(saved.SportarrUrl, cfg.SportarrUrl) &&
+            matchesSavedValue(saved.SportarrApiKey, cfg.SportarrApiKey) &&
+            matchesSavedValue(saved.SeerrUrl, cfg.SeerrUrl) &&
+            matchesSavedValue(saved.SeerrApiKey, cfg.SeerrApiKey);
 
-        if (!savedOk) {
-          throw new Error('Jellyfin returned different plugin configuration after save');
+          if (!savedOk) {
+            throw new Error('Jellyfin returned different plugin configuration after save');
+          }
+
+          setConfigStatus(view, 'Saved', true);
+        } catch {
+          setConfigStatus(view, 'Save failed or did not persist', false);
+        } finally {
+          saveBtn.disabled = false;
         }
-
-        setConfigStatus(view, 'Saved', true);
-      } catch {
-        setConfigStatus(view, 'Save failed or did not persist', false);
-      } finally {
-        saveBtn.disabled = false;
-      }
-    });
+      });
+    }
 
     loadConfigPage(view);
   }
@@ -191,6 +194,10 @@
     bindConfigPage(document.getElementById('arrUnmonitorConfigPage'));
   }
 
-  document.addEventListener('pageshow', initConfigPage);
+  if (window.arrUnmonitorPageshowBound !== true) {
+    window.arrUnmonitorPageshowBound = true;
+    document.addEventListener('pageshow', initConfigPage);
+  }
+
   initConfigPage();
 })();

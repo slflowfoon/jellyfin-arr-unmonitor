@@ -1,8 +1,8 @@
 # Arr Unmonitor
 
-Arr Unmonitor is a Jellyfin plugin that unmonitors matching Radarr movies, Sonarr series, and Sportarr events when media is deleted from Jellyfin. It can also clear the deleted movie or show's stale availability and request record from Seerr.
+Arr Unmonitor is a Jellyfin plugin that unmonitors matching Radarr movies, Sonarr series, and Sportarr events when media is deleted through Jellyfin's Delete Media action. It can also clear the deleted movie or show's stale availability and request record from Seerr.
 
-The plugin listens to Jellyfin's item removed event and matches items by provider ID:
+The plugin correlates Jellyfin item removed events with authenticated Delete Media API requests, then matches items by provider ID:
 
 - Radarr movies: TMDb ID
 - Sonarr series: TVDb ID
@@ -13,6 +13,8 @@ Deleting a Sportarr season folder such as `Formula 1/Season 2026` unmonitors onl
 Deleting a top-level Sportarr league such as `MotoGP` applies the same exact-child matching and falls back to Sonarr when no Sportarr events match safely.
 
 Title-only matching is intentionally not implemented in the first version because it is easy to unmonitor the wrong item.
+
+Library scans, metadata reconciliation, unavailable mounts, and files removed outside Jellyfin are ignored. Jellyfin does not include a deletion reason in its item removed event, so accepting only Delete Media requests prevents temporary library changes from altering Arr or Seerr state.
 
 ## Configuration
 

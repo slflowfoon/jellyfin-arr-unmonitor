@@ -11,10 +11,11 @@ using Microsoft.Extensions.Logging;
 
 namespace ArrUnmonitor.Services;
 
-public class ItemDeletedMonitor : IHostedService
+internal sealed class ItemDeletedMonitor : IHostedService
 {
     private readonly ILibraryManager _libraryManager;
     private readonly IArrClient _arrClient;
+    private readonly IDeleteMediaRequestDetector _deleteMediaRequestDetector;
     private readonly ILogger<ItemDeletedMonitor> _logger;
     private readonly object _cacheLock = new();
     private readonly Dictionary<Guid, BaseItem> _fileItemCache = [];
@@ -22,10 +23,12 @@ public class ItemDeletedMonitor : IHostedService
     public ItemDeletedMonitor(
         ILibraryManager libraryManager,
         IArrClient arrClient,
+        IDeleteMediaRequestDetector deleteMediaRequestDetector,
         ILogger<ItemDeletedMonitor> logger)
     {
         _libraryManager = libraryManager;
         _arrClient = arrClient;
+        _deleteMediaRequestDetector = deleteMediaRequestDetector;
         _logger = logger;
     }
 
@@ -55,7 +58,9 @@ public class ItemDeletedMonitor : IHostedService
                 "Arr Unmonitor could not initialize its folder-deletion cache; individual item monitoring will remain active");
         }
 
-        _logger.LogInformation("Arr Unmonitor deletion monitor started with {ItemCount} file paths cached", cachedItemCount);
+        _logger.LogInformation(
+            "Arr Unmonitor deletion monitor started with {ItemCount} file paths cached; only Jellyfin Delete Media requests will be processed",
+            cachedItemCount);
         return Task.CompletedTask;
     }
 
@@ -83,7 +88,34 @@ public class ItemDeletedMonitor : IHostedService
         }
 
         var deletedChildren = TakeDeletedChildren(args.Item);
+        if (!_deleteMediaRequestDetector.IsDeleteMediaRequest(args.Item.Id))
+        {
+            LogIgnoredBackgroundRemoval(args.Item);
+            return;
+        }
+
         _ = HandleItemRemovedAsync(args.Item, deletedChildren);
+    }
+
+    private void LogIgnoredBackgroundRemoval(BaseItem item)
+    {
+        var typeName = item.GetType().Name;
+        if (string.Equals(typeName, "Movie", StringComparison.Ordinal) ||
+            string.Equals(typeName, "Series", StringComparison.Ordinal) ||
+            string.Equals(typeName, "Season", StringComparison.Ordinal) ||
+            string.Equals(typeName, "Episode", StringComparison.Ordinal))
+        {
+            _logger.LogInformation(
+                "Arr Unmonitor ignored background Jellyfin removal {ItemName} ({ItemType}); it was not a Delete Media request",
+                item.Name,
+                typeName);
+            return;
+        }
+
+        _logger.LogDebug(
+            "Arr Unmonitor ignored background Jellyfin removal {ItemName} ({ItemType}); it was not a Delete Media request",
+            item.Name,
+            typeName);
     }
 
     private async Task HandleItemRemovedAsync(BaseItem item, IReadOnlyList<BaseItem> deletedChildren)
@@ -99,7 +131,7 @@ public class ItemDeletedMonitor : IHostedService
 
             var typeName = item.GetType().Name;
             _logger.LogInformation(
-                "Arr Unmonitor saw deleted Jellyfin item {ItemName} ({ItemType}) at {Path}",
+                "Arr Unmonitor is processing Jellyfin Delete Media item {ItemName} ({ItemType}) at {Path}",
                 item.Name,
                 typeName,
                 item.Path ?? "unknown path");
